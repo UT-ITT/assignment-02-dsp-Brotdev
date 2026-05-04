@@ -6,6 +6,9 @@ from time import sleep
 CHUNK_SIZE = 4096
 RATE = 44100
 CHANNELS = 1
+VOLUME_THRESHOLD = -50.0
+SLOPE_THRESHOLD = 50.0
+SLOPE_THRESHOLD_MAX = 120.0
 
 # print info about audio devices
 print("Available input devices:\n")
@@ -22,6 +25,7 @@ input_device = int(input("\nSelect input device: "))
 
 keyboard = Controller()
 buffer = []
+dedupe = 5
 state = None
 
 # Compute RMS of audio sample
@@ -58,6 +62,7 @@ def get_slope():
 # audio callback to safe data
 def audio_callback(indata, frames, time, status):
     global buffer
+    global dedupe
     global state
 
     if status:
@@ -66,23 +71,28 @@ def audio_callback(indata, frames, time, status):
     data = indata[:, 0]  # mono
 
     volume = calc_volume(data)
-    if volume < -50:
+    if volume < VOLUME_THRESHOLD:
         buffer.clear()
+        dedupe = 5
         return
 
     pitch = detect_pitch(data, RATE)
-    buffer.append(pitch)
-    del buffer[:-5]
+    if len(buffer) < 1 or pitch != buffer[-1] or dedupe < 1:
+        buffer.append(pitch)
+        del buffer[:-5]
+        dedupe = 5
+    else:
+        dedupe -= 1
 
     slope = get_slope()
 
     if state is None:
-        if slope > 20:
+        if SLOPE_THRESHOLD < slope < SLOPE_THRESHOLD_MAX:
             keyboard.press(Key.up)
             keyboard.release(Key.up)
             print("Detected UP chirp")
             state = 1
-        elif slope < -20:
+        if -SLOPE_THRESHOLD_MAX < slope < -SLOPE_THRESHOLD:
             keyboard.press(Key.down)
             keyboard.release(Key.down)
             print("Detected DOWN chirp")
@@ -104,6 +114,6 @@ stream = sd.InputStream(
 
 # continously capture and plot audio signal
 with stream:
-    print("\nStreaming... (Ctrl+C to stop)")
+    print("\nNow listening for chirps (Ctrl+C to stop)")
     while True:
         sleep(0.01)
