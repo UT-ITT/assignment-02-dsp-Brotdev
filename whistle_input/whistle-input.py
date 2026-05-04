@@ -116,4 +116,4 @@ stream = sd.InputStream(
 with stream:
     print("\nNow listening for chirps (Ctrl+C to stop)")
     while True:
-        sleep(0.01)
+        sleep(1)
